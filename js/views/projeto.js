@@ -1,0 +1,230 @@
+/* Detalhe do Projeto — tudo sobre um projeto numa tela só:
+   dados mestre, Estrutura, Mídias (clicável), Histórico, Pendências.
+   Inclui editar/excluir do projeto e de cada item das listas. */
+
+import { store } from "../data/store.js";
+import { esc } from "../ui/dom.js";
+import { badgeFromLista } from "../ui/badges.js";
+import { abrirNovoProjeto, abrirNovaEstrutura, abrirNovoHistorico, abrirNovaDemanda } from "./cadastros.js";
+
+export async function renderProjeto(app, id) {
+  const projeto = await store.getProjeto(id);
+  if (!projeto) {
+    app.innerHTML = `<a class="back-link" href="#/">← Voltar</a>
+      <div class="empty">Projeto não encontrado.</div>`;
+    return;
+  }
+
+  const [listas, estrutura, midias, historico, demandas, fitas] = await Promise.all([
+    store.getListas(),
+    store.estruturaDoProjeto(id),
+    store.midiasDoProjeto(id),
+    store.historicoDoProjeto(id),
+    store.demandasDoProjeto(id),
+    store.fitasDoProjeto(id),
+  ]);
+
+  const localizacoes = projeto.localizacoes || [];
+  const midiaMap = Object.fromEntries(midias.map((m) => [m.id, m.nome]));
+
+  app.innerHTML = `
+    <a class="back-link" href="#/">← Voltar para projetos</a>
+
+    <div class="detail-head">
+      <div>
+        <h1 class="page-title">${esc(projeto.nome)}</h1>
+        <div class="page-sub">${esc(projeto.ano)} · atualizado em ${esc(projeto.ultimaAtualizacao || "—")}</div>
+      </div>
+      <div class="row-end">
+        ${badgeFromLista(listas.statusProjeto, projeto.statusProjeto)}
+        <button class="btn" data-act="editar">Editar</button>
+        <button class="btn btn-ghost" data-act="excluir" title="Excluir projeto">🗑</button>
+      </div>
+    </div>
+
+    <div class="meta-grid">
+      ${metaCell("Atividade atual", esc(projeto.atividadeAtual || "—"))}
+      ${metaCell("ALFRED", esc(projeto.alfred || "—"))}
+      ${metaCell("LTO", (projeto.lto || []).length
+        ? `<div class="tags">${projeto.lto.map((l) => `<span class="tag">${esc(l)}</span>`).join("")}</div>`
+        : "—")}
+      ${metaCell("Localizações", localizacoes.length
+        ? `<div class="tags">${localizacoes.map((l) => `<span class="tag">${esc(l)}</span>`).join("")}</div>`
+        : `<span class="muted">nenhuma mídia</span>`)}
+    </div>
+
+    <!-- ESTRUTURA -->
+    <section class="section">
+      <div class="section-head"><h2>Estrutura</h2>
+        <button class="btn btn-ghost" data-act="nova-pasta">+ Nova pasta</button></div>
+      <div class="note"><span class="note-i">ⓘ</span>
+        As localizações de cada pasta vêm automaticamente das mídias que contêm este projeto.</div>
+      <div class="list-card">
+        ${estrutura.length ? estrutura.map((e) => estruturaRow(e, listas, midiaMap)).join("")
+          : `<div class="empty">Nenhuma pasta registrada.</div>`}
+      </div>
+    </section>
+
+    <!-- MÍDIAS -->
+    <section class="section">
+      <div class="section-head"><h2>Mídias</h2></div>
+      <div class="note"><span class="note-i">ⓘ</span>
+        Mídias que contêm este projeto. A lista vem do campo “Projetos armazenados” de cada mídia.</div>
+      <div class="list-card" id="midias">
+        ${midias.length ? midias.map((m) => midiaRow(m, listas)).join("")
+          : `<div class="empty">Nenhuma mídia contém este projeto.</div>`}
+      </div>
+    </section>
+
+    <!-- FITAS -->
+    ${fitas.length ? `<section class="section">
+      <div class="section-head"><h2>Fitas</h2></div>
+      <div class="note"><span class="note-i">ⓘ</span>
+        Fitas (Betacam / Mini DV) vinculadas a este projeto.</div>
+      <div class="list-card">
+        ${fitas.map((f) => fitaRow(f, listas)).join("")}
+      </div>
+    </section>` : ""}
+
+    <!-- HISTÓRICO -->
+    <section class="section">
+      <div class="section-head"><h2>Histórico</h2>
+        <button class="btn btn-ghost" data-act="novo-historico">+ Novo registro</button></div>
+      <div class="list-card">
+        ${historico.length ? historico.map((h) => historicoRow(h)).join("")
+          : `<div class="empty">Sem histórico.</div>`}
+      </div>
+    </section>
+
+    <!-- PENDÊNCIAS -->
+    <section class="section">
+      <div class="section-head"><h2>Pendências</h2>
+        <button class="btn btn-ghost" data-act="nova-demanda">+ Nova demanda</button></div>
+      <div class="list-card">
+        ${demandas.length ? demandas.map((d) => demandaRow(d, listas)).join("")
+          : `<div class="empty">Sem pendências.</div>`}
+      </div>
+    </section>
+  `;
+
+  // navegação para detalhe de mídia (ignora cliques nos botões de ação)
+  app.querySelector("#midias").addEventListener("click", (e) => {
+    if (e.target.closest("[data-row-act]")) return;
+    const row = e.target.closest("[data-midia]");
+    if (row) location.hash = `#/midia/${row.dataset.midia}`;
+  });
+
+  // ações do projeto (cabeçalho) e de adicionar itens
+  const acoes = {
+    "editar": () => abrirNovoProjeto(projeto),
+    "excluir": async () => {
+      if (!confirm(`Excluir o projeto "${projeto.nome}"?\n\nIsto remove também a estrutura, o histórico e as pendências deste projeto, e tira o projeto das mídias. Não dá para desfazer.`)) return;
+      await store.removeProjeto(projeto.id);
+      location.hash = "#/";
+    },
+    "nova-pasta": () => abrirNovaEstrutura({ projetoIdFixo: projeto.id }),
+    "novo-historico": () => abrirNovoHistorico(projeto.id),
+    "nova-demanda": () => abrirNovaDemanda(projeto.id),
+  };
+  app.querySelectorAll("[data-act]").forEach((btn) =>
+    btn.addEventListener("click", () => acoes[btn.dataset.act]?.())
+  );
+
+  // editar/excluir itens das listas
+  ligaItens(app, "e", estrutura,
+    (rec) => abrirNovaEstrutura({ projetoIdFixo: projeto.id }, rec),
+    (rec) => [`Excluir a pasta "${rec.caminho}"?`, () => store.removeEstrutura(rec.id)]);
+  ligaItens(app, "h", historico,
+    (rec) => abrirNovoHistorico(projeto.id, rec),
+    (rec) => [`Excluir este registro de histórico (${rec.periodo})?`, () => store.removeHistorico(rec.id)]);
+  ligaItens(app, "d", demandas,
+    (rec) => abrirNovaDemanda(projeto.id, rec),
+    (rec) => [`Excluir a pendência "${rec.pendencia}"?`, () => store.removeDemanda(rec.id)]);
+}
+
+/* liga os botões ✎/🗑 de uma lista. tipo: "e" | "h" | "d" */
+function ligaItens(app, tipo, registros, onEdit, onDel) {
+  const porId = Object.fromEntries(registros.map((r) => [r.id, r]));
+  app.querySelectorAll(`[data-edit="${tipo}"]`).forEach((b) =>
+    b.addEventListener("click", () => onEdit(porId[b.dataset.id]))
+  );
+  app.querySelectorAll(`[data-del="${tipo}"]`).forEach((b) =>
+    b.addEventListener("click", async () => {
+      const [msg, acao] = onDel(porId[b.dataset.id]);
+      if (!confirm(msg)) return;
+      await acao();
+      window.dispatchEvent(new CustomEvent("data-changed"));
+    })
+  );
+}
+
+function acoesRow(tipo, id) {
+  return `<span class="lr-actions">
+    <button class="icon-btn" data-row-act data-edit="${tipo}" data-id="${esc(id)}" title="Editar">✎</button>
+    <button class="icon-btn danger" data-row-act data-del="${tipo}" data-id="${esc(id)}" title="Excluir">🗑</button>
+  </span>`;
+}
+
+function metaCell(label, valueHtml) {
+  return `<div class="meta-cell">
+    <div class="meta-label">${label}</div>
+    <div class="meta-value">${valueHtml}</div>
+  </div>`;
+}
+
+function estruturaRow(e, listas, midiaMap) {
+  const midiaNome = midiaMap[e.midiaId] || "";
+  return `<div class="list-row">
+    <div class="lr-main">
+      <div class="lr-title">${esc(e.caminho)} <span class="muted" style="font-weight:400">· ${esc(e.tipoMaterial)}</span></div>
+      <div class="lr-sub">${midiaNome ? `<a href="#/midia/${esc(e.midiaId)}" style="color:var(--accent)">${esc(midiaNome)}</a> · ` : ""}${esc(e.resumo || "")}</div>
+    </div>
+    ${e.arquivadoLto ? `<span class="tag">${esc(e.arquivadoLto)}</span>` : ""}
+    ${badgeFromLista(listas.statusPasta, e.statusPasta)}
+    ${acoesRow("e", e.id)}
+  </div>`;
+}
+
+function midiaRow(m, listas) {
+  const n = (m.projetosArmazenados || []).length;
+  return `<div class="list-row clickable" data-midia="${esc(m.id)}">
+    <div class="lr-main">
+      <div class="lr-title">${esc(m.nome)} <span class="muted" style="font-weight:400">· ${esc(m.tipo)} · ${esc(m.capacidade)}</span></div>
+      <div class="lr-sub">${n > 1 ? `Contém ${n} projetos` : "Projeto único"}</div>
+    </div>
+    ${badgeFromLista(listas.statusMidia, m.statusMidia)}
+    <span class="muted">›</span>
+  </div>`;
+}
+
+function historicoRow(h) {
+  return `<div class="list-row">
+    <div class="lr-main">
+      <div class="lr-title">${esc(h.acao)} <span class="muted" style="font-weight:400">· ${esc(h.periodo)}</span></div>
+      <div class="lr-sub">${esc(h.observacoes || "")}</div>
+    </div>
+    ${acoesRow("h", h.id)}
+  </div>`;
+}
+
+function demandaRow(d, listas) {
+  return `<div class="list-row">
+    <div class="lr-main">
+      <div class="lr-title">${esc(d.pendencia)}</div>
+      <div class="lr-sub">${esc(d.responsavel || "—")}</div>
+    </div>
+    ${badgeFromLista(listas.prioridade, d.prioridade)}
+    ${badgeFromLista(listas.statusDemanda, d.status)}
+    ${acoesRow("d", d.id)}
+  </div>`;
+}
+
+function fitaRow(f, listas) {
+  return `<div class="list-row">
+    <div class="lr-main">
+      <div class="lr-title">📼 ${esc(f.codigo)} <span class="muted" style="font-weight:400">· ${esc(f.tipo)}</span></div>
+      <div class="lr-sub">${esc(f.localFisico || "")}${f.observacoes ? ` · ${esc(f.observacoes)}` : ""}</div>
+    </div>
+    ${badgeFromLista(listas.statusFita || [], f.statusFita)}
+  </div>`;
+}

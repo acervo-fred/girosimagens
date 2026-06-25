@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// ============================================================
+// Regras do Firestore — projeto giros-imagens
+// ============================================================
+// ⚠️ TEMPORÁRIAS (fase de desenvolvimento, SEM login).
+// Liberam leitura/escrita SOMENTE nas coleções do acervo, e só
+// até a data de expiração (devAberto). Como o app fica no GitHub
+// Pages (público) e a apiKey é visível, estas regras NÃO protegem
+// os dados — qualquer pessoa com a URL poderia ler/gravar.
+//
+// ANTES de colocar dados reais, troque pelo bloco "COM LOGIN"
+// mais abaixo (Firebase Auth) e publique de novo.
+//
+// Obs.: o Firestore não permite prefixo em path (ex.: acervo_{x}),
+// por isso cada coleção é listada explicitamente.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // libera enquanto estiver dentro do prazo de desenvolvimento
+    function devAberto() {
+      return request.time < timestamp.date(2026, 9, 30);
+    }
+
+    match /acervo_projetos/{document=**}  { allow read, write: if devAberto(); }
+    match /acervo_midias/{document=**}     { allow read, write: if devAberto(); }
+    match /acervo_estrutura/{document=**}  { allow read, write: if devAberto(); }
+    match /acervo_historico/{document=**}  { allow read, write: if devAberto(); }
+    match /acervo_demandas/{document=**}   { allow read, write: if devAberto(); }
+    match /acervo_config/{document=**}     { allow read, write: if devAberto(); }
+
+    // Nada mais é exposto (RTDB é outro banco e não é afetado por isto).
+  }
+}
+
+// ============================================================
+// VERSÃO COM LOGIN (usar quando ativarmos o Firebase Auth):
+//
+// service cloud.firestore {
+//   match /databases/{database}/documents {
+//     function souEu() {
+//       return request.auth != null
+//         && request.auth.token.email == "acervo@girostraffic.page";
+//     }
+//     match /acervo_projetos/{document=**}  { allow read, write: if souEu(); }
+//     match /acervo_midias/{document=**}     { allow read, write: if souEu(); }
+//     match /acervo_estrutura/{document=**}  { allow read, write: if souEu(); }
+//     match /acervo_historico/{document=**}  { allow read, write: if souEu(); }
+//     match /acervo_demandas/{document=**}   { allow read, write: if souEu(); }
+//     match /acervo_config/{document=**}     { allow read, write: if souEu(); }
+//   }
+// }
+// ============================================================

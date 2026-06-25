@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plataforma Giros Imagens</title>
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <div class="layout">
+
+    <!-- ===== Sidebar de navegação ===== -->
+    <aside class="sidebar">
+      <a href="#/" class="side-logo" title="Início">
+        <img src="./GIROSFILMES_NEGATIVO.png" alt="Giros Filmes" />
+      </a>
+
+      <nav class="side-nav">
+        <div class="side-group" id="sg-projetos">
+          <div class="side-group-head">
+            <a href="#/" data-nav="projetos"><span class="ni-ic">🎬</span> Projetos</a>
+            <button type="button" class="sg-caret-btn" aria-label="Expandir projetos">›</button>
+          </div>
+          <div class="sg-list" id="sg-list-projetos"></div>
+        </div>
+        <div class="side-group" id="sg-midias">
+          <div class="side-group-head">
+            <a href="#/midias" data-nav="midias"><span class="ni-ic">💾</span> Mídias</a>
+            <button type="button" class="sg-caret-btn" aria-label="Expandir mídias">›</button>
+          </div>
+          <div class="sg-list" id="sg-list-midias"></div>
+        </div>
+        <a href="#/fitas" data-nav="fitas"><span class="ni-ic">📼</span> Fitas</a>
+        <a href="#/historico" data-nav="historico"><span class="ni-ic">🕐</span> Histórico</a>
+        <a href="#/demandas" data-nav="demandas"><span class="ni-ic">❗</span> Demandas</a>
+        <a href="#/dashboard" data-nav="dashboard"><span class="ni-ic">📊</span> Dashboard</a>
+      </nav>
+
+      <a href="#/caderno" data-nav="caderno" class="side-nav-bottom"><span class="ni-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span> Caderno</a>
+
+      <!-- Atividade recente: recolhida, expande no hover/clique -->
+      <div class="activity-drawer" id="activity-drawer">
+        <button class="ad-tab" id="ad-tab" type="button">
+          <span class="ad-ic">🕐</span>
+          <span class="ad-label">Atividade recente</span>
+          <span class="ad-caret">›</span>
+        </button>
+        <div class="ad-panel">
+          <div class="ad-head">Atividade recente</div>
+          <div id="ad-list"></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== Área principal ===== -->
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-right">
+          <button class="btn" id="btn-registro-dia" type="button">+ Registro do dia</button>
+          <a href="#/config" class="btn btn-ghost" data-nav="config">⚙ Configurações</a>
+        </div>
+      </header>
+      <main id="app" class="app"><!-- views renderizadas aqui --></main>
+    </div>
+  </div>
+
+  <!-- container de modais -->
+  <div id="modal-root"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
