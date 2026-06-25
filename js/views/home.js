@@ -54,11 +54,13 @@ export async function renderHome(app) {
 
   function desenhar() {
     const termo = busca.trim().toLowerCase();
-    const lista = projetos.filter((p) => {
-      const okBusca = !termo || p.nome.toLowerCase().includes(termo) || String(p.ano).includes(termo);
-      const okStatus = filtroStatus === "Todos" || p.statusProjeto === filtroStatus;
-      return okBusca && okStatus;
-    });
+    const lista = projetos
+      .filter((p) => {
+        const okBusca = !termo || p.nome.toLowerCase().includes(termo) || String(p.ano).includes(termo);
+        const okStatus = filtroStatus === "Todos" || p.statusProjeto === filtroStatus;
+        return okBusca && okStatus;
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
     grid.innerHTML = lista.length
       ? lista.map((p) => projectCard(p, listas)).join("")
       : `<div class="empty">Nenhum projeto encontrado.</div>`;

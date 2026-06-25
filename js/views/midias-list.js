@@ -29,8 +29,9 @@ export async function renderMidiasLista(app) {
 
   function desenhar() {
     const t = busca.trim().toLowerCase();
-    const arr = midias.filter((m) =>
-      !t || m.nome.toLowerCase().includes(t) || (m.tipo || "").toLowerCase().includes(t));
+    const arr = midias
+      .filter((m) => !t || m.nome.toLowerCase().includes(t) || (m.tipo || "").toLowerCase().includes(t))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
     lista.innerHTML = arr.length ? arr.map((m) => row(m, listas, nomePorId)).join("")
       : `<div class="empty">Nenhuma mídia encontrada.</div>`;
   }

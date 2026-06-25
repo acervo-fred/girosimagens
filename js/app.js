@@ -34,7 +34,11 @@ function placeholder(titulo, msg) {
 }
 
 async function router() {
-  const hash = location.hash || "#/";
+  if (!location.hash || location.hash === "#") {
+    location.replace(location.pathname + "#/");
+    return;
+  }
+  const hash = location.hash;
   const [rota, param] = hash.replace(/^#\//, "").split("/");
 
   window.scrollTo(0, 0);
