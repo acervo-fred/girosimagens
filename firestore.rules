@@ -29,6 +29,7 @@ service cloud.firestore {
     match /acervo_estrutura/{document=**}  { allow read, write: if devAberto(); }
     match /acervo_historico/{document=**}  { allow read, write: if devAberto(); }
     match /acervo_demandas/{document=**}   { allow read, write: if devAberto(); }
+    match /acervo_fitas/{document=**}      { allow read, write: if devAberto(); }
     match /acervo_config/{document=**}     { allow read, write: if devAberto(); }
 
     // Nada mais é exposto (RTDB é outro banco e não é afetado por isto).
@@ -49,6 +50,7 @@ service cloud.firestore {
 //     match /acervo_estrutura/{document=**}  { allow read, write: if souEu(); }
 //     match /acervo_historico/{document=**}  { allow read, write: if souEu(); }
 //     match /acervo_demandas/{document=**}   { allow read, write: if souEu(); }
+//     match /acervo_fitas/{document=**}      { allow read, write: if souEu(); }
 //     match /acervo_config/{document=**}     { allow read, write: if souEu(); }
 //   }
 // }

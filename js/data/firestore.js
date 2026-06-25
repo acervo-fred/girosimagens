@@ -1,7 +1,6 @@
 /* ============================================================
    Backend Firestore — implementa a MESMA API do mockStore.
    Projeto giros-imagens, banco Firestore (NÃO o Realtime DB).
-   Só inicializa Firestore; o RTDB existente não é tocado.
 
    Campos derivados (localizacoes, ultimaAtualizacao) continuam
    calculados no cliente, nunca gravados.
@@ -19,7 +18,7 @@ import { listas as listasDefault } from "./mock.js";
 const app = initializeApp(firebaseConfig);
 const fdb = getFirestore(app);
 
-/* ---------- helpers de leitura ---------- */
+/* ---------- helpers ---------- */
 async function allDocs(coll) {
   const snap = await getDocs(collection(fdb, coll));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -29,7 +28,6 @@ async function docsWhere(coll, campo, valor) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/* ---------- derivação (cliente) ---------- */
 function localizacoesDeProjeto(projetoId, midias) {
   return midias.filter((m) => (m.projetosArmazenados || []).includes(projetoId)).map((m) => m.nome);
 }
@@ -37,14 +35,16 @@ function ultimaAtualizacao(projetoId, historico) {
   const datas = historico.filter((h) => h.projetoId === projetoId && h.data).map((h) => h.data).sort();
   return datas.length ? datas[datas.length - 1] : null;
 }
+function nomeProjetoOuGeral(projetoId, nomePorId) {
+  return projetoId ? (nomePorId[projetoId] || "—") : "Geral";
+}
 
 export const firestoreStore = {
-  /* LISTAS (doc único acervo_config/listas) */
+  /* LISTAS */
   async getListas() {
     const ref = doc(fdb, COLLECTIONS.config, "listas");
     const snap = await getDoc(ref);
     const stored = snap.exists() ? snap.data() : {};
-    // defaults garantem que categorias ainda não salvas funcionem
     return { ...structuredClone(listasDefault), ...stored };
   },
   async saveLista(chave, valores) {
@@ -56,9 +56,7 @@ export const firestoreStore = {
   /* PROJETOS */
   async listProjetos() {
     const [projetos, midias, historico] = await Promise.all([
-      allDocs(COLLECTIONS.projetos),
-      allDocs(COLLECTIONS.midias),
-      allDocs(COLLECTIONS.historico),
+      allDocs(COLLECTIONS.projetos), allDocs(COLLECTIONS.midias), allDocs(COLLECTIONS.historico),
     ]);
     return projetos.map((p) => ({
       ...p,
@@ -70,54 +68,52 @@ export const firestoreStore = {
     const snap = await getDoc(doc(fdb, COLLECTIONS.projetos, id));
     if (!snap.exists()) return null;
     const [midias, historico] = await Promise.all([
-      allDocs(COLLECTIONS.midias),
-      docsWhere(COLLECTIONS.historico, "projetoId", id),
+      allDocs(COLLECTIONS.midias), docsWhere(COLLECTIONS.historico, "projetoId", id),
     ]);
     const p = { id: snap.id, ...snap.data() };
-    return {
-      ...p,
-      localizacoes: localizacoesDeProjeto(id, midias),
-      ultimaAtualizacao: ultimaAtualizacao(id, historico),
-    };
+    return { ...p, localizacoes: localizacoesDeProjeto(id, midias), ultimaAtualizacao: ultimaAtualizacao(id, historico) };
   },
 
   /* MÍDIAS */
-  async listMidias() {
-    return allDocs(COLLECTIONS.midias);
-  },
+  async listMidias() { return allDocs(COLLECTIONS.midias); },
   async getMidia(id) {
     const snap = await getDoc(doc(fdb, COLLECTIONS.midias, id));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   },
   async midiasDoProjeto(projetoId) {
     const snap = await getDocs(query(
-      collection(fdb, COLLECTIONS.midias),
-      where("projetosArmazenados", "array-contains", projetoId)
+      collection(fdb, COLLECTIONS.midias), where("projetosArmazenados", "array-contains", projetoId),
     ));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
   async projetosDaMidia(midiaId) {
     const m = await this.getMidia(midiaId);
     if (!m) return [];
-    const ids = m.projetosArmazenados || [];
+    const cpp = m.conteudoPorProjeto || {};
     const projetos = await allDocs(COLLECTIONS.projetos);
     const porId = Object.fromEntries(projetos.map((p) => [p.id, p]));
-    return ids.map((pid) => {
+    return (m.projetosArmazenados || []).map((pid) => {
       const p = porId[pid];
       return p
-        ? { id: p.id, nome: p.nome, ano: p.ano, statusProjeto: p.statusProjeto, existe: true }
-        : { id: pid, nome: "(projeto removido)", ano: "", statusProjeto: null, existe: false };
+        ? { id: p.id, nome: p.nome, ano: p.ano, statusProjeto: p.statusProjeto, existe: true, conteudo: cpp[pid] || "" }
+        : { id: pid, nome: "(projeto removido)", ano: "", statusProjeto: null, existe: false, conteudo: cpp[pid] || "" };
     });
   },
 
   /* ESTRUTURA */
   async estruturaDoProjeto(projetoId) {
     const [pastas, midias] = await Promise.all([
-      docsWhere(COLLECTIONS.estrutura, "projetoId", projetoId),
-      allDocs(COLLECTIONS.midias),
+      docsWhere(COLLECTIONS.estrutura, "projetoId", projetoId), allDocs(COLLECTIONS.midias),
     ]);
     const locais = localizacoesDeProjeto(projetoId, midias);
     return pastas.map((e) => ({ ...e, localizacoes: locais }));
+  },
+  async estruturaDaMidia(midiaId) {
+    const [pastas, projetos] = await Promise.all([
+      docsWhere(COLLECTIONS.estrutura, "midiaId", midiaId), allDocs(COLLECTIONS.projetos),
+    ]);
+    const nomePorId = Object.fromEntries(projetos.map((p) => [p.id, p.nome]));
+    return pastas.map((e) => ({ ...e, projetoNome: nomePorId[e.projetoId] || "—" }));
   },
 
   /* HISTÓRICO */
@@ -125,31 +121,35 @@ export const firestoreStore = {
     const hist = await docsWhere(COLLECTIONS.historico, "projetoId", projetoId);
     return hist.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   },
-
-  /* DEMANDAS */
-  async demandasDoProjeto(projetoId) {
-    return docsWhere(COLLECTIONS.demandas, "projetoId", projetoId);
-  },
-  async listDemandas() {
-    const [demandas, projetos] = await Promise.all([
-      allDocs(COLLECTIONS.demandas), allDocs(COLLECTIONS.projetos),
-    ]);
-    const nomePorId = Object.fromEntries(projetos.map((p) => [p.id, p.nome]));
-    return demandas.map((d) => ({ ...d, projetoNome: nomePorId[d.projetoId] || "—" }));
-  },
-
-  /* HISTÓRICO global (com nome do projeto, recente→antigo) */
   async listHistorico() {
     const [historico, projetos] = await Promise.all([
       allDocs(COLLECTIONS.historico), allDocs(COLLECTIONS.projetos),
     ]);
     const nomePorId = Object.fromEntries(projetos.map((p) => [p.id, p.nome]));
     return historico
-      .map((h) => ({ ...h, projetoNome: nomePorId[h.projetoId] || "—" }))
+      .map((h) => ({ ...h, projetoNome: nomeProjetoOuGeral(h.projetoId, nomePorId) }))
       .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   },
 
-  /* ESCRITA */
+  /* DEMANDAS */
+  async demandasDoProjeto(projetoId) { return docsWhere(COLLECTIONS.demandas, "projetoId", projetoId); },
+  async listDemandas() {
+    const [demandas, projetos] = await Promise.all([
+      allDocs(COLLECTIONS.demandas), allDocs(COLLECTIONS.projetos),
+    ]);
+    const nomePorId = Object.fromEntries(projetos.map((p) => [p.id, p.nome]));
+    return demandas.map((d) => ({ ...d, projetoNome: nomeProjetoOuGeral(d.projetoId, nomePorId) }));
+  },
+
+  /* FITAS */
+  async listFitas() { return allDocs(COLLECTIONS.fitas); },
+  async getFita(id) {
+    const snap = await getDoc(doc(fdb, COLLECTIONS.fitas, id));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  },
+  async fitasDoProjeto(projetoId) { return docsWhere(COLLECTIONS.fitas, "projetoId", projetoId); },
+
+  /* ---------- ESCRITA ---------- */
   async addProjeto(d) {
     const ref = await addDoc(collection(fdb, COLLECTIONS.projetos), {
       nome: d.nome, ano: d.ano, statusProjeto: d.statusProjeto,
@@ -160,29 +160,40 @@ export const firestoreStore = {
   async addMidia(d) {
     const ref = await addDoc(collection(fdb, COLLECTIONS.midias), {
       nome: d.nome, tipo: d.tipo, capacidade: d.capacidade || "",
-      statusMidia: d.statusMidia, projetosArmazenados: d.projetosArmazenados || [],
-      conteudo: d.conteudo || "",
+      statusMidia: d.statusMidia, local: d.local || "",
+      projetosArmazenados: d.projetosArmazenados || [],
+      conteudo: d.conteudo || "", conteudoPorProjeto: d.conteudoPorProjeto || {},
     });
     return { id: ref.id, ...d };
   },
   async addEstrutura(d) {
     const ref = await addDoc(collection(fdb, COLLECTIONS.estrutura), {
-      projetoId: d.projetoId, caminho: d.caminho, tipoMaterial: d.tipoMaterial,
+      projetoId: d.projetoId, midiaId: d.midiaId || "",
+      caminho: d.caminho, tipoMaterial: d.tipoMaterial,
       resumo: d.resumo || "", statusPasta: d.statusPasta, arquivadoLto: d.arquivadoLto || "",
     });
     return { id: ref.id, ...d };
   },
   async addHistorico(d) {
     const ref = await addDoc(collection(fdb, COLLECTIONS.historico), {
-      projetoId: d.projetoId, periodoTipo: d.periodoTipo, periodo: d.periodo,
+      projetoId: d.projetoId || "", periodoTipo: d.periodoTipo, periodo: d.periodo,
       acao: d.acao, observacoes: d.observacoes || "", data: d.data,
     });
     return { id: ref.id, ...d };
   },
   async addDemanda(d) {
     const ref = await addDoc(collection(fdb, COLLECTIONS.demandas), {
-      projetoId: d.projetoId, pendencia: d.pendencia, prioridade: d.prioridade,
+      projetoId: d.projetoId || "", pendencia: d.pendencia, prioridade: d.prioridade,
       responsavel: d.responsavel, status: d.status,
+    });
+    return { id: ref.id, ...d };
+  },
+  async addFita(d) {
+    const ref = await addDoc(collection(fdb, COLLECTIONS.fitas), {
+      codigo: d.codigo, tipo: d.tipo, localFisico: d.localFisico || "",
+      projetoNome: d.projetoNome || "", projetoId: d.projetoId || "",
+      statusFita: d.statusFita, observacoes: d.observacoes || "",
+      dataCadastro: d.dataCadastro || new Date().toISOString().slice(0, 10),
     });
     return { id: ref.id, ...d };
   },
@@ -192,11 +203,11 @@ export const firestoreStore = {
   async updateMidia(id, campos) { await updateDoc(doc(fdb, COLLECTIONS.midias, id), campos); return { id, ...campos }; },
   async updateEstrutura(id, campos) { await updateDoc(doc(fdb, COLLECTIONS.estrutura, id), campos); return { id, ...campos }; },
   async updateHistorico(id, campos) { await updateDoc(doc(fdb, COLLECTIONS.historico, id), campos); return { id, ...campos }; },
+  async updateFita(id, campos) { await updateDoc(doc(fdb, COLLECTIONS.fitas, id), campos); return { id, ...campos }; },
   async updateDemanda(id, campos) { await updateDoc(doc(fdb, COLLECTIONS.demandas, id), campos); return { id, ...campos }; },
 
   /* ---------- EXCLUSÃO ---------- */
   async removeProjeto(id) {
-    // remove dependentes e tira o id das mídias
     const [estr, hist, dem, midias] = await Promise.all([
       docsWhere(COLLECTIONS.estrutura, "projetoId", id),
       docsWhere(COLLECTIONS.historico, "projetoId", id),
@@ -217,17 +228,18 @@ export const firestoreStore = {
   async removeMidia(id) { await deleteDoc(doc(fdb, COLLECTIONS.midias, id)); return true; },
   async removeEstrutura(id) { await deleteDoc(doc(fdb, COLLECTIONS.estrutura, id)); return true; },
   async removeHistorico(id) { await deleteDoc(doc(fdb, COLLECTIONS.historico, id)); return true; },
+  async removeFita(id) { await deleteDoc(doc(fdb, COLLECTIONS.fitas, id)); return true; },
   async removeDemanda(id) { await deleteDoc(doc(fdb, COLLECTIONS.demandas, id)); return true; },
 
-  /* ---------- BACKUP (export / import) ---------- */
+  /* ---------- BACKUP ---------- */
   async exportAll() {
-    const [projetos, midias, estrutura, historico, demandas, listas] = await Promise.all([
+    const [projetos, midias, estrutura, historico, demandas, fitas, listas] = await Promise.all([
       allDocs(COLLECTIONS.projetos), allDocs(COLLECTIONS.midias), allDocs(COLLECTIONS.estrutura),
-      allDocs(COLLECTIONS.historico), allDocs(COLLECTIONS.demandas), this.getListas(),
+      allDocs(COLLECTIONS.historico), allDocs(COLLECTIONS.demandas), allDocs(COLLECTIONS.fitas),
+      this.getListas(),
     ]);
-    return { projetos, midias, estrutura, historico, demandas, listas };
+    return { projetos, midias, estrutura, historico, demandas, fitas, listas };
   },
-  // Escreve usando os IDs do backup (setDoc) — referências por ID continuam válidas.
   async importAll(data) {
     const grava = async (chaveColl, itens) => {
       if (!Array.isArray(itens)) return;
@@ -242,23 +254,25 @@ export const firestoreStore = {
     await grava(COLLECTIONS.estrutura, data.estrutura);
     await grava(COLLECTIONS.historico, data.historico);
     await grava(COLLECTIONS.demandas, data.demandas);
+    await grava(COLLECTIONS.fitas, data.fitas);
     if (data.listas) await setDoc(doc(fdb, COLLECTIONS.config, "listas"), data.listas);
   },
 
   /* ATIVIDADE RECENTE */
   async atividadeRecente(limite = 12) {
     const [projetos, historico, demandas] = await Promise.all([
-      allDocs(COLLECTIONS.projetos),
-      allDocs(COLLECTIONS.historico),
-      allDocs(COLLECTIONS.demandas),
+      allDocs(COLLECTIONS.projetos), allDocs(COLLECTIONS.historico), allDocs(COLLECTIONS.demandas),
     ]);
     const nomePorId = Object.fromEntries(projetos.map((p) => [p.id, p.nome]));
     const hist = historico.map((h) => ({
-      tipo: "historico", projetoId: h.projetoId, projetoNome: nomePorId[h.projetoId] || "—",
-      quando: h.periodo, data: h.data || "", texto: `${h.acao} — ${h.observacoes || ""}`.trim(),
+      tipo: "historico", projetoId: h.projetoId,
+      projetoNome: nomeProjetoOuGeral(h.projetoId, nomePorId),
+      quando: h.periodo, data: h.data || "",
+      texto: `${h.acao} — ${h.observacoes || ""}`.trim(),
     }));
     const dem = demandas.map((d) => ({
-      tipo: "demanda", projetoId: d.projetoId, projetoNome: nomePorId[d.projetoId] || "—",
+      tipo: "demanda", projetoId: d.projetoId,
+      projetoNome: nomeProjetoOuGeral(d.projetoId, nomePorId),
       quando: d.status, data: "", texto: d.pendencia,
     }));
     return [...hist, ...dem]

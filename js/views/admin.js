@@ -52,6 +52,15 @@ export async function renderAdmin(app) {
       </div>
 
       <div class="cfg-card">
+        <div class="cfg-card-head"><h3>Migrar localStorage → Firestore</h3></div>
+        <div style="padding:16px">
+          <p class="muted" style="margin-top:0;font-size:13.5px">Envia todos os dados salvos neste navegador (localStorage) para o Firestore. Use uma vez para migrar.</p>
+          <button class="btn btn-primary" id="btn-migrar">🔄 Migrar para Firestore</button>
+          <div id="migrar-status" class="muted" style="font-size:13px;margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="cfg-card">
         <div class="cfg-card-head"><h3>Dados de exemplo</h3></div>
         <div style="padding:16px">
           <p class="muted" style="margin-top:0;font-size:13.5px">Grava o conjunto de exemplo no backend atual (útil para popular o Firestore na primeira vez). Sobrescreve itens de mesmo ID.</p>
@@ -87,6 +96,24 @@ export async function renderAdmin(app) {
       importStatus.textContent = "✗ Erro: " + err.message;
     }
     fileInput.value = "";
+  });
+
+  // migrar localStorage → Firestore
+  const migrarStatus = app.querySelector("#migrar-status");
+  app.querySelector("#btn-migrar")?.addEventListener("click", async () => {
+    const LS_KEY = "acervo-giros-db-v1";
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) { migrarStatus.textContent = "✗ Nenhum dado encontrado no localStorage."; return; }
+    if (!confirm("Enviar todos os dados do localStorage para o Firestore? Itens com mesmo ID serão sobrescritos.")) return;
+    migrarStatus.textContent = "Migrando…";
+    try {
+      const dados = JSON.parse(raw);
+      await store.importAll(dados);
+      migrarStatus.textContent = "✓ Migração concluída. Recarregando…";
+      setTimeout(() => { location.hash = "#/"; location.reload(); }, 600);
+    } catch (err) {
+      migrarStatus.textContent = "✗ Erro: " + err.message;
+    }
   });
 
   // popular exemplo
