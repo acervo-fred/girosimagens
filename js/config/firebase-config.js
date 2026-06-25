@@ -21,7 +21,7 @@
 //          É o modo atual de desenvolvimento.
 //  true  → Firestore (giros-imagens). Deixado pronto e desligado;
 //          só usar quando quiser sincronizar entre dispositivos.
-export const USE_FIRESTORE = location.hostname !== "localhost" && location.hostname !== "127.0.0.1";
+export const USE_FIRESTORE = true;
 
 export const firebaseConfig = {
   apiKey: "AIzaSyC-0iuPs5xhvjjh2LmzoGjAKtAh6aY2-ZQ",

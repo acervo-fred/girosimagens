@@ -398,8 +398,13 @@ const mockStore = {
    Os dois objetos implementam a MESMA API — as telas não mudam. */
 let store = mockStore;
 if (USE_FIRESTORE) {
-  const mod = await import("./firestore.js");
-  store = mod.firestoreStore;
+  try {
+    const mod = await import("./firestore.js");
+    store = mod.firestoreStore;
+    console.info("Usando Firestore como backend.");
+  } catch (e) {
+    console.warn("Firestore indisponível — usando localStorage como fallback.", e);
+  }
 }
 
 export { store };
