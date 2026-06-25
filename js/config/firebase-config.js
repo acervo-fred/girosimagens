@@ -21,7 +21,7 @@
 //          É o modo atual de desenvolvimento.
 //  true  → Firestore (giros-imagens). Deixado pronto e desligado;
 //          só usar quando quiser sincronizar entre dispositivos.
-export const USE_FIRESTORE = true;
+export const USE_FIRESTORE = false;
 
 export const firebaseConfig = {
   apiKey: "AIzaSyC-0iuPs5xhvjjh2LmzoGjAKtAh6aY2-ZQ",
