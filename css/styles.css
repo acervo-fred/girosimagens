@@ -515,21 +515,27 @@ a { color: inherit; text-decoration: none; }
 /* VHS tape progress (dashboard) */
 .vhs-card { display: flex; flex-direction: column; align-items: center; }
 .vhs-container {
-  position: relative; overflow: hidden;
-  width: 180px; aspect-ratio: 640/390;
+  position: relative;
+  width: 200px; aspect-ratio: 511/272;
+}
+.vhs-fill-wrapper {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;
+  -webkit-mask-image: url('../fita_mask.png');
+  mask-image: url('../fita_mask.png');
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 .vhs-img {
   display: block; width: 100%; height: 100%;
   object-fit: contain;
   position: relative; z-index: 2;
-  mix-blend-mode: multiply;
 }
 .vhs-fill-done {
-  position: absolute; top: 0; bottom: 0; left: 0; z-index: 1;
+  position: absolute; top: 0; bottom: 0; left: 0;
   background: var(--text); opacity: 0.55;
 }
 .vhs-fill-proc {
-  position: absolute; top: 0; bottom: 0; z-index: 1;
+  position: absolute; top: 0; bottom: 0;
   background: repeating-conic-gradient(var(--text) 0% 25%, transparent 0% 50%) 0 0 / 8px 8px;
   opacity: 0.2;
 }

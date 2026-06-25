@@ -210,8 +210,10 @@ function fitaVHS(digitalizadas, emProcesso, total) {
   return `
     <div class="vhs-card">
       <div class="vhs-container">
-        <div class="vhs-fill-done" style="width:${pctDone}%"></div>
-        <div class="vhs-fill-proc" style="width:${pctProc}%;left:${pctDone}%"></div>
+        <div class="vhs-fill-wrapper">
+          <div class="vhs-fill-done" style="width:${pctDone}%"></div>
+          <div class="vhs-fill-proc" style="width:${pctProc}%;left:${pctDone}%"></div>
+        </div>
         <img src="./FITA_VHS.png" class="vhs-img" alt="Fita VHS" />
       </div>
       <div class="vhs-legend-row">
