@@ -8,8 +8,8 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, doc, getDoc, getDocs, addDoc, setDoc,
-  updateDoc, deleteDoc, query, where,
+  getFirestore, collection, doc, getDoc, getDocs, getDocsFromServer,
+  addDoc, setDoc, updateDoc, deleteDoc, query, where,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { firebaseConfig, COLLECTIONS } from "../config/firebase-config.js";
@@ -20,11 +20,11 @@ const fdb = getFirestore(app);
 
 /* ---------- helpers ---------- */
 async function allDocs(coll) {
-  const snap = await getDocs(collection(fdb, coll));
+  const snap = await getDocsFromServer(collection(fdb, coll));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 async function docsWhere(coll, campo, valor) {
-  const snap = await getDocs(query(collection(fdb, coll), where(campo, "==", valor)));
+  const snap = await getDocsFromServer(query(collection(fdb, coll), where(campo, "==", valor)));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
