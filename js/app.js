@@ -184,11 +184,12 @@ function ligarDrawer() {
 }
 
 window.addEventListener("hashchange", router);
-window.addEventListener("DOMContentLoaded", () => {
-  ligarDrawer();
-  ligarSidebarGrupos();
-  router();
-  document.getElementById("btn-registro-dia")?.addEventListener("click", () => abrirNovoHistorico());
-});
-// re-renderiza a tela atual (e a atividade) após um cadastro/edição
 window.addEventListener("data-changed", router);
+
+// type="module" é sempre deferido; o top-level await do store.js faz o
+// DOMContentLoaded disparar antes de app.js terminar — por isso iniciamos
+// diretamente aqui, quando o módulo já resolveu e o DOM está garantidamente pronto.
+ligarDrawer();
+ligarSidebarGrupos();
+router();
+document.getElementById("btn-registro-dia")?.addEventListener("click", () => abrirNovoHistorico());
