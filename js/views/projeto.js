@@ -1,5 +1,5 @@
 /* Detalhe do Projeto — tudo sobre um projeto numa tela só:
-   dados mestre, Estrutura, Mídias (clicável), Histórico, Pendências.
+   dados mestre, Mídias, Estrutura (agrupada por mídia), Histórico, Pendências.
    Inclui editar/excluir do projeto e de cada item das listas. */
 
 import { store } from "../data/store.js";
@@ -25,7 +25,7 @@ export async function renderProjeto(app, id) {
   ]);
 
   const localizacoes = projeto.localizacoes || [];
-  const midiaMap = Object.fromEntries(midias.map((m) => [m.id, m.nome]));
+  const midiaMap = Object.fromEntries(midias.map((m) => [m.id, m]));
 
   app.innerHTML = `
     <a class="back-link" href="#/">← Voltar para projetos</a>
@@ -53,26 +53,25 @@ export async function renderProjeto(app, id) {
         : `<span class="muted">nenhuma mídia</span>`)}
     </div>
 
-    <!-- ESTRUTURA -->
-    <section class="section">
-      <div class="section-head"><h2>Estrutura</h2>
-        <button class="btn btn-ghost" data-act="nova-pasta">+ Nova pasta</button></div>
-      <div class="note"><span class="note-i">ⓘ</span>
-        As localizações de cada pasta vêm automaticamente das mídias que contêm este projeto.</div>
-      <div class="list-card">
-        ${estrutura.length ? estrutura.map((e) => estruturaRow(e, listas, midiaMap)).join("")
-          : `<div class="empty">Nenhuma pasta registrada.</div>`}
-      </div>
-    </section>
-
     <!-- MÍDIAS -->
     <section class="section">
       <div class="section-head"><h2>Mídias</h2></div>
       <div class="note"><span class="note-i">ⓘ</span>
-        Mídias que contêm este projeto. A lista vem do campo “Projetos armazenados” de cada mídia.</div>
+        Mídias que contêm este projeto. A lista vem do campo "Projetos armazenados" de cada mídia.</div>
       <div class="list-card" id="midias">
         ${midias.length ? midias.map((m) => midiaRow(m, listas)).join("")
           : `<div class="empty">Nenhuma mídia contém este projeto.</div>`}
+      </div>
+    </section>
+
+    <!-- ESTRUTURA (agrupada por mídia) -->
+    <section class="section">
+      <div class="section-head"><h2>Estrutura de pastas</h2>
+        <button class="btn btn-ghost" data-act="nova-pasta">+ Nova pasta</button></div>
+      <div class="note"><span class="note-i">ⓘ</span>
+        Pastas de cada mídia que contém este projeto. Você também pode cadastrá-las direto no formulário da mídia.</div>
+      <div id="estrutura-grupos">
+        ${estruturaAgrupada(estrutura, midiaMap, listas)}
       </div>
     </section>
 
@@ -123,11 +122,12 @@ export async function renderProjeto(app, id) {
       location.hash = "#/";
     },
     "nova-pasta": () => abrirNovaEstrutura({ projetoIdFixo: projeto.id }),
+    "nova-pasta-grupo": (btn) => abrirNovaEstrutura({ projetoIdFixo: projeto.id, midiaIdFixo: btn.dataset.midia }),
     "novo-historico": () => abrirNovoHistorico(projeto.id),
     "nova-demanda": () => abrirNovaDemanda(projeto.id),
   };
   app.querySelectorAll("[data-act]").forEach((btn) =>
-    btn.addEventListener("click", () => acoes[btn.dataset.act]?.())
+    btn.addEventListener("click", () => acoes[btn.dataset.act]?.(btn))
   );
 
   // editar/excluir itens das listas
@@ -172,12 +172,44 @@ function metaCell(label, valueHtml) {
   </div>`;
 }
 
-function estruturaRow(e, listas, midiaMap) {
-  const midiaNome = midiaMap[e.midiaId] || "";
+/* Estrutura agrupada por mídia */
+function estruturaAgrupada(estrutura, midiaMap, listas) {
+  if (!estrutura.length) {
+    return `<div class="empty">Nenhuma pasta registrada. Cadastre pela mídia ou clique em "+ Nova pasta".</div>`;
+  }
+
+  const grupos = new Map();
+  for (const e of estrutura) {
+    const key = e.midiaId || "";
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(e);
+  }
+
+  return [...grupos.entries()].map(([midiaId, pastas]) => {
+    const midia = midiaMap[midiaId];
+    const label = midia ? midia.nome : (midiaId ? "—" : "Sem mídia");
+    const midiaRef = midia
+      ? `<a href="#/midia/${esc(midiaId)}" class="est-grupo-link">${esc(label)}</a>`
+      : `<span class="muted">${esc(label)}</span>`;
+    const n = pastas.length;
+    return `<div class="est-grupo">
+      <div class="est-grupo-head">
+        ${midiaRef}
+        <span class="est-grupo-count">${n} ${n === 1 ? "pasta" : "pastas"}</span>
+        ${midia ? `<button class="btn btn-ghost est-grupo-add" data-act="nova-pasta-grupo" data-midia="${esc(midiaId)}">+ pasta</button>` : ""}
+      </div>
+      <div class="list-card">
+        ${pastas.map((p) => estruturaRow(p, listas)).join("")}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function estruturaRow(e, listas) {
   return `<div class="list-row">
     <div class="lr-main">
       <div class="lr-title">${esc(e.caminho)} <span class="muted" style="font-weight:400">· ${esc(e.tipoMaterial)}</span></div>
-      <div class="lr-sub">${midiaNome ? `<a href="#/midia/${esc(e.midiaId)}" style="color:var(--accent)">${esc(midiaNome)}</a> · ` : ""}${esc(e.resumo || "")}</div>
+      ${e.resumo ? `<div class="lr-sub">${esc(e.resumo)}</div>` : ""}
     </div>
     ${e.arquivadoLto ? `<span class="tag">${esc(e.arquivadoLto)}</span>` : ""}
     ${badgeFromLista(listas.statusPasta, e.statusPasta)}

@@ -69,10 +69,14 @@ export async function abrirNovoProjeto(existente = null) {
 
 /* ---------------- Mídia (criar / editar) ---------------- */
 export async function abrirNovaMidia(existente = null) {
-  const [listas, projetos] = await Promise.all([store.getListas(), store.listProjetos()]);
-  projetos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   const ed = !!existente;
   const m = existente || {};
+  const [listas, projetos, estruturaExistente] = await Promise.all([
+    store.getListas(),
+    store.listProjetos(),
+    ed ? store.estruturaDaMidia(m.id) : Promise.resolve([]),
+  ]);
+  projetos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   const itens = projetos.map((p) => ({ value: p.id, label: `${p.nome} (${p.ano})` }));
   openModal({
     title: ed ? "Editar mídia" : "Nova mídia",
@@ -92,12 +96,46 @@ export async function abrirNovaMidia(existente = null) {
         <div class="field-hint" style="margin-bottom:6px">Marque os projetos e descreva o conteúdo de cada um nesta mídia.</div>
         <div id="proj-conteudo-lista"></div>
       </div>
+      <div class="field">
+        <label>Estrutura de pastas <span style="font-weight:400;color:var(--text-faint);font-size:12px">— opcional</span></label>
+        <div class="field-hint" style="margin-bottom:6px">Pastas desta mídia por projeto. Detalhes como resumo e LTO podem ser editados depois na página do projeto.</div>
+        <div id="est-lista"></div>
+        <button type="button" id="est-add-btn" class="btn btn-ghost" style="width:100%;margin-top:6px;font-size:12px">+ Adicionar pasta</button>
+      </div>
       ${fieldTextarea("observacoes", "Observações", { value: m.conteudo || "", hint: "Observações gerais sobre esta mídia." })}
     `,
     onMount: (form) => {
       const lista = form.querySelector("#proj-conteudo-lista");
       const marcados = new Set(m.projetosArmazenados || []);
       const state = { ...(m.conteudoPorProjeto || {}) };
+      const estLista = form.querySelector("#est-lista");
+      const deletedIds = new Set();
+
+      function projetoOptsHtml(selectedPid) {
+        return [...marcados].map((pid) => {
+          const it = itens.find((x) => x.value === pid);
+          return it ? `<option value="${esc(pid)}" ${pid === selectedPid ? "selected" : ""}>${esc(it.label)}</option>` : "";
+        }).join("");
+      }
+      function tipoOptsHtml(selected) {
+        return (listas.tipoMaterial || []).map((t) =>
+          `<option value="${esc(t)}" ${t === selected ? "selected" : ""}>${esc(t)}</option>`
+        ).join("");
+      }
+      function statusOptsHtml(selected) {
+        return (listas.statusPasta || []).map((s) => {
+          const v = typeof s === "string" ? s : s.valor;
+          return `<option value="${esc(v)}" ${v === selected ? "selected" : ""}>${esc(v)}</option>`;
+        }).join("");
+      }
+
+      function atualizarEstProj() {
+        estLista.querySelectorAll(".est-proj").forEach((sel) => {
+          const cur = sel.value;
+          sel.innerHTML = projetoOptsHtml(cur);
+          if (!sel.value && marcados.size > 0) sel.value = [...marcados][0];
+        });
+      }
 
       function salvarValores() {
         lista.querySelectorAll("input[data-pid]").forEach((inp) => {
@@ -124,6 +162,7 @@ export async function abrirNovaMidia(existente = null) {
         if (!itens.length) {
           lista.innerHTML = '<div class="empty" style="padding:14px">Nenhum projeto cadastrado ainda.</div>';
         }
+        atualizarEstProj();
       }
       desenhar();
 
@@ -137,6 +176,53 @@ export async function abrirNovaMidia(existente = null) {
         });
         return result;
       };
+
+      function addEstRow({ id = "", projetoId = "", caminho = "", tipoMaterial = "", statusPasta = "" } = {}) {
+        if (!projetoId && marcados.size > 0) projetoId = [...marcados][0];
+        if (!tipoMaterial) tipoMaterial = (listas.tipoMaterial || [])[0] || "";
+        if (!statusPasta) {
+          const s0 = (listas.statusPasta || [])[0];
+          statusPasta = typeof s0 === "string" ? s0 : (s0?.valor || "");
+        }
+        const row = document.createElement("div");
+        row.className = "est-form-row";
+        if (id) row.dataset.estId = id;
+        row.innerHTML = `
+          <select class="est-proj">${projetoOptsHtml(projetoId)}</select>
+          <input class="est-caminho" type="text" value="${esc(caminho)}" placeholder="Caminho da pasta…">
+          <select class="est-tipo">${tipoOptsHtml(tipoMaterial)}</select>
+          <select class="est-status">${statusOptsHtml(statusPasta)}</select>
+          <button type="button" class="est-del-btn" title="Remover">✕</button>
+        `;
+        row.querySelector(".est-del-btn").addEventListener("click", () => {
+          if (id) deletedIds.add(id);
+          row.remove();
+        });
+        estLista.appendChild(row);
+      }
+
+      for (const e of estruturaExistente) {
+        addEstRow({ id: e.id, projetoId: e.projetoId, caminho: e.caminho, tipoMaterial: e.tipoMaterial, statusPasta: e.statusPasta });
+      }
+
+      form.querySelector("#est-add-btn").addEventListener("click", () => addEstRow());
+
+      form._getEstruturaRows = () => {
+        const rows = [];
+        estLista.querySelectorAll(".est-form-row").forEach((row) => {
+          const cam = row.querySelector(".est-caminho").value.trim();
+          if (!cam) return;
+          rows.push({
+            id: row.dataset.estId || null,
+            projetoId: row.querySelector(".est-proj").value,
+            caminho: cam,
+            tipoMaterial: row.querySelector(".est-tipo").value,
+            statusPasta: row.querySelector(".est-status").value,
+          });
+        });
+        return rows;
+      };
+      form._getDeletedEstruturaIds = () => [...deletedIds];
     },
     onSubmit: async (form) => {
       const nome = readValue(form, "nome");
@@ -151,8 +237,25 @@ export async function abrirNovaMidia(existente = null) {
         conteudo: readValue(form, "observacoes"),
         conteudoPorProjeto: form._getConteudoPorProjeto(),
       };
-      if (ed) await store.updateMidia(m.id, campos);
-      else await store.addMidia(campos);
+
+      let midiaId;
+      if (ed) {
+        await store.updateMidia(m.id, campos);
+        midiaId = m.id;
+      } else {
+        const nova = await store.addMidia(campos);
+        midiaId = nova.id;
+      }
+
+      for (const id of form._getDeletedEstruturaIds()) {
+        await store.removeEstrutura(id);
+      }
+      for (const row of form._getEstruturaRows()) {
+        const dadosEst = { projetoId: row.projetoId, midiaId, caminho: row.caminho, tipoMaterial: row.tipoMaterial, statusPasta: row.statusPasta };
+        if (row.id) await store.updateEstrutura(row.id, dadosEst);
+        else await store.addEstrutura(dadosEst);
+      }
+
       avisarMudanca();
     },
   });
